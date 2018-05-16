@@ -1,0 +1,20 @@
+\frametitle{Correlations}
+With \texttt{brms} you can also deal easily with different correlation structures by specifieng: \\
+\begin{itemize}
+\item \textbf{cor_arma}: autoregressive-moving average (ARMA) structure. \\
+\item \textbf{cor_arr}: response autoregressive (ARR) structure \\
+\item \textbf{cor_car}: Spatial conditional autoregressive (CAR) structure \\
+\item \textbf{cor_sar}: Spatial simultaneous autoregressive (SAR) structure \\
+\item \textbf{cor_bsts}: Bayesian structural time series (BSTS) structure \\
+\item \textbf{cor_fixed}: fixed user-defined covariance structure \\
+\end{itemize}
+
+\begin{knitrout}
+\definecolor{shadecolor}{rgb}{0.969, 0.969, 0.969}\color{fgcolor}\begin{kframe}
+\begin{alltt}
+\hlkwd{brm}\hlstd{(mpg} \hlopt{~} \hlstd{wt} \hlopt{+} \hlstd{am} \hlopt{+} \hlstd{(}\hlnum{1}\hlopt{|}\hlstd{cyl),} \hlkwc{data} \hlstd{= mtcars,} \hlkwc{prior} \hlstd{=} \hlkwa{NULL}\hlstd{,}
+    \hlkwc{family}\hlstd{=}\hlstr{"gaussian"}\hlstd{,} \hlkwd{cor_arma}\hlstd{(}\hlkwc{formula} \hlstd{=} \hlopt{~}\hlnum{1}\hlstd{,} \hlkwc{q} \hlstd{=} \hlnum{1}\hlstd{))}
+\end{alltt}
+\end{kframe}
+\end{knitrout}
+

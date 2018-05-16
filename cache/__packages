@@ -1,0 +1,13 @@
+base
+knitr
+Rcpp
+rstanarm
+ggplot2
+brms
+cowplot
+gridExtra
+StanHeaders
+rstan
+dplyr
+shiny
+bindrcpp

@@ -1,0 +1,821 @@
+\documentclass[handout]{beamer}
+
+\usetheme{Madrid}
+\usepackage{tikz}
+\usepackage{underscore}
+%\usepackage{lmodern}
+%\usepackage[english]{babel}
+\usepackage{enumerate}
+%\usepackage{graphicx}
+%\usepackage{array}
+%\usepackage{multirow}
+%\usepackage{multicol}
+\beamertemplatenavigationsymbolsempty
+
+%Bibliography 
+\usepackage[backend=bibtex,style=bwl-FU]{biblatex}
+\renewcommand*{\nameyeardelim}{\addcomma\addspace}
+\usetikzlibrary{arrows,shapes}
+\usefonttheme[onlymath]{serif}
+
+
+\addbibresource{Literature.bib}
+
+
+\title{Bayesian Analysis in R: brms vs rstanarm}
+\author{Alice Milivinti\newline\url{a.lice.milivinti@gmail.com}}}
+\date{12 april 2018}
+ 
+ 
+\begin{document}
+
+
+<<data import, cache=TRUE, echo=FALSE, include=FALSE, warning=FALSE, eval=TRUE>>=
+
+rm(list = ls())
+
+library(knitr)
+library(rstanarm)
+library(brms)
+library(cowplot)
+library(gridExtra)
+library(rstan)
+library(ggplot2)
+library(dplyr)
+library(shiny)
+#devtools::install_github("paul-buerkner/brms")
+
+
+@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\frame{\titlepage}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{Bayesians vs Frequentist}
+\begin{figure}
+\centering
+\includegraphics[scale=.3]{bayesians.png}
+\end{figure}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Probability is...}
+\pause
+{\Large \textbf{Frequentists}} \\
+\vskip 1cm
+\pause
+Fundamentally related to the frequencies of repeated events. 
+\pause
+\begin{align*}
+\mathbf{Pr(A \mid B) \propto Pr(B \mid A) }
+\end{align*}
+%approximately proportional to...
+$Pr(A \mid B)$: Posterior; \\
+$Pr(B \mid A)$: Likelihood = Data Knowledge. \\
+\pause
+Given the observed data, what is the best estimate of the true value?
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Maximum Likelihood}
+\pause
+Model: each observation $A_i$ drawn from a Gaussian of width $e_{i}$
+% Gaussian centered at the observed value and with width given by the error
+\begin{align*}
+P(B_{i} \mid A_{true}) =  \frac{1}{\sqrt{2 \pi e_{i}^2}} \exp \left[ -\frac{(A_{i} - A_{true})^2}{2 e_{i}} \right]
+\end{align*}
+
+
+<<normal generation, cache=TRUE, echo=FALSE, include=FALSE, warning=FALSE>>=
+
+x  = seq(-5, 5, length = 200)
+y1 = dnorm(x, mean = 0,sd = 1)
+y2 = dnorm(x, mean = 1,sd = 1.2)
+y3 = dnorm(x, mean = 1,sd = 1.4)
+y4 = dnorm(x, mean = 0.5,sd = 1)
+y5 = dnorm(x, mean = 0.6,sd = 0.8)
+y6 = dnorm(x, mean = 1.1,sd = 1.3)
+y7 = dnorm(x, mean = 1.2 ,sd = 1.2)
+y8 = dnorm(x, mean = 1 ,sd = 2)
+y9 = dnorm(x, mean = 1 ,sd = .7)
+
+mydf = data.frame(x, y1, y2, y3, y4, y5, y6, y7, y8, y9)
+
+@
+
+<<cache=TRUE, echo=FALSE, include=TRUE, fig.width=4, fig.height=2>>=
+
+ggplot(mydf, aes(x = x)) +                         
+     geom_line(aes(y = y1))
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{Buldind the Maximum Likelihood}
+\begin{align*}
+\mathcal{L}(B \mid A_{true}) =  \prod_{i=1}^{N} P(B_{i} \mid A_{true})
+\end{align*}
+
+<<cache=TRUE, echo=FALSE, include=TRUE, fig.width=4, fig.height=2>>=
+
+ggplot(mydf, aes(x = x)) +                         
+     geom_line(aes(y = y1)) +
+     geom_line(aes(y = y2)) +
+     geom_area(aes(y = pmin(y1*y2)), fill = 'pink')
+
+@
+
+%What happens for each single measurement.
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{Buldind the Maximum Likelihood}
+\begin{align*}
+\mathcal{L}(B \mid A_{true}) =  \prod_{i=1}^{N} P(B_{i} \mid A_{true})
+\end{align*}
+
+
+<<cache=TRUE, echo=FALSE, include=TRUE, fig.width=4, fig.height=2>>=
+
+ggplot(mydf, aes(x = x)) +                         
+     geom_line(aes(y = y1)) +
+     geom_line(aes(y = y2)) +
+     geom_line(aes(y = y3)) +
+     geom_area(aes(y = pmin(y1*y2*y3)), fill = 'pink')
+
+@
+
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{Buldind the Maximum Likelihood}
+\begin{align*}
+\mathcal{L}(B \mid A_{true}) =  \prod_{i=1}^{N} P(B_{i} \mid A_{true})
+\end{align*}
+
+<<cache=TRUE, echo=FALSE, include=TRUE, fig.width=4, fig.height=2>>=
+
+ggplot(mydf, aes(x = x)) +                         
+     geom_line(aes(y = y1)) +
+     geom_line(aes(y = y2)) +
+     geom_line(aes(y = y3)) +
+      geom_line(aes(y = y7)) +
+     geom_line(aes(y = y9)) +
+     geom_area(aes(y = pmin(y1*y2*y3*y7)), fill = 'pink')
+
+@
+
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Probability is...}
+\pause
+{\Large \textbf{Bayesian}} \\
+\vskip 1cm
+\pause
+Fundamentally related to {\color{green} OUR OWN} certainty or uncertainty of events.
+\pause
+\begin{align*}
+\mathbf{Pr(A \mid B) \propto Pr(B \mid A) {\color{green} Pr(A)} }
+\end{align*}
+$Pr(A \mid B)$: Posterior; \\
+$Pr(B \mid A)$: Likelihood = Data Knowledge. \\
+${\color{green} Pr(A)}$: Prior = Our Knowledge.
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{Prior, Likeloihood and Posterior}
+\pause
+\begin{align*}
+\mathbf{{\color{blue} Pr(A \mid B)} \propto \color{red} {Pr(B \mid A) } {\color{green} Pr(A)} }
+\end{align*}
+\pause
+
+
+<<bayes, cache=TRUE, echo=FALSE, include=TRUE, fig.width=4, fig.height=2>>=
+
+ggplot(data.frame(x = c(-5,5)), aes(x = x)) +
+  stat_function(fun = dnorm, args = list(mean = -1, sd = 1),  size = .75, aes(color = "Prior")) +
+  stat_function(fun = dnorm, args = list(mean = 0.25, sd = .5),  size = .75, aes(color = "Posterior")) +
+  stat_function(fun = dnorm, args = list(mean = 1, sd = .75),  size = .75, aes(color = "Likelihood")) +
+  scale_color_manual(name="",  values=c("Prior"='green', "Posterior"='blue', 'Likelihood'='red')) +
+  theme_bw() 
+
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{A word on the priors...}
+\pause
+Priors can be: informative, weakly informative or uninformative. \\
+\pause
+A Bayesian analysis which uses an uninformative prior, such as
+\pause
+\begin{align*}
+\mathcal{U} \left( -\infty, +\infty \right)
+\end{align*}
+\pause
+will give the same result as a frequentist analysis.
+
+<<uniform, cache=TRUE, echo=FALSE, include=TRUE, fig.width=4, fig.height=2>>=
+
+ggplot(data.frame(x = c(-5,5)), aes(x = x)) +
+  stat_function(fun = dnorm, args = list(mean = 1, sd = .75),  size = 2, aes(color = "Likelihood")) +
+  stat_function(fun = dnorm, args = list(mean = 1, sd = .75),  size = 1, aes(color = "Posterior")) +
+  stat_function(fun = dunif, args = list(min = -Inf, max = +Inf), size = 1, aes(color = "Prior")) +
+  scale_color_manual(name="",  values=c("Prior"='green', "Posterior"='blue', 'Likelihood'='red')) +
+  theme_bw() 
+
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Sample the Posterior}
+
+So far we have investigated how to use Bayesian techniques to determine posterior probability distribution for a set of parameters in light of some data. \\
+\pause
+However, our parameter set may be highly-dimensional, and we may only be interested in a sub-set of (marginalized) parameters. \\
+\pause
+\textbf{Markov Chain Monte Carlo (MCMC) is an efficient approach to this problem.}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Markov Chain Monte Carlo}
+
+Straight-forward Monte Carlo integration suffers from some problems...(especially if your posterior probability is peaked in a small volume of your parameter space).\\
+\pause
+Need for a method to throw down more points into the volume in regions of interest, and not waste points where the integrand is negligible. \\
+\pause
+We can use a Markov Chain to “walk” through the parameter space, vagabonding in regions of high significance, and avoiding everywhere else.
+\pause
+\textbf{MCMC Algorithms: ex. Metropolis-Hasting, Gibbs, etc.}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Frequestist Approach}
+
+Frequentism is a probabilistic statement about a recipe for generating confidence intervals given a fixed model parameter
+\pause
+\begin{figure}
+\centering
+\includegraphics[scale=.25]{Frequentist2.png}
+\end{figure}
+{\tiny \textit{Credits:} \textcite{vanderplas2014}}
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{Bayesian Approach}
+
+\pause
+Bayesianism is aprobabilisitic statement about model parameters given a fixed credible region
+\pause
+
+\begin{figure}
+\centering
+\includegraphics[scale=.25]{Bayesian2.png}
+\end{figure}
+{\tiny \textit{Credits:} \textcite{vanderplas2014}}
+
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Please Remember This}
+\pause
+A frequentist 95\% confidence interval is NOT 95\% likely to contain the true value! \\ 
+\pause
+\vskip 1cm
+This very common mistake is a Bayesian interpretation of a frequentist construct. \\
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Take Home Message}
+
+\textbf{Frequentists}
+A 95\% of such Confidence Intervals in repeated experiments will contain the true value! \\
+\vskip 1cm
+\pause
+\textbf{Bayesians}
+A 95\% Credible Region is 95\% likely to contain the true value! \\
+\end{frame}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{STAN}
+\pause
+Stan language \autocite{stan2015} which makes use of the Hamiltonian Monte-Carlo Sampler \autocite{neal2011mcmc} of Hybrid Monte-Carlo Sampler (HMC) \autocite{duane1987hybrid} and its extension No-U-Turn Sampler (NUTS) \autocite{hoffman2014no}. \\
+\vskip .3cm
+\pause
+
+\begin{itemize}
+\item Much higher effective sample size per iteration for complex posteriors.
+\pause
+\item  Overall, much higher number of effective samples per second.
+\pause
+\item Does not require any special behaviour for conjugate priors, which much impact the priors' choice \autocite{hoffman2014no}.
+\end{itemize}
+
+%Gibbs need conjugate priors
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{STAN \& R}
+\pause
+\begin{itemize}
+\item \texttt{rstan}: R Interface to Stan C++ library for Bayesian estimation. Upload your stan code and run it through R. %then analyse results using dependencies
+\vskip 1cm
+\pause
+\item \texttt{rstanarm} \& \texttt{brms}:  Estimate previously compiled regression models using \texttt{rstan}. Users specify models via the R syntax with a formula and data.frame plus some additional arguments for priors.  
+
+\end{itemize}
+
+\end{frame}
+ 
+ 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{\texttt{rstanarm} \& \texttt{brms}}
+
+\begin{columns}[onlytextwidth,t]
+\begin{column}{0.48\textwidth}
+\texttt{rstanarm} \\
+\begin{itemize}
+\item manual's pages: 121
+\item topics documented: 47
+\item authors \& contributors: 17, Jonah Gabry, Imad Ali, Sam Brilleman, Jacqueline Buros Novik, AstraZeneca, Trustees of Columbia University, Simon Wood, R Core Deveopment Team, Douglas Bates, Martin Maechler, Ben Bolker, Steve Walker, Brian Ripley, William Venables, Ben Goodrich
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}  
+\texttt{brms} \\
+\begin{itemize}
+\item manual's pages: 154
+\item topics documented: 144 (so detailed!)
+\item author: 1, Paul-Christian B\"{u}rkner \\
+%He is ridiculously responsive in adding functions or helping with any problem
+\end{itemize}
+\end{column}
+\end{columns}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}[fragile]
+\frametitle{Syntax Comparison with mtcars}
+With default weakly informative priors: \\
+\texttt{rstanarm}: \\
+
+<<cache=TRUE, eval=FALSE, tidy=FALSE>>=
+
+stan_glm(formula = mpg ~ wt + am + cyl, data = mtcars, 
+         prior = NULL, family = gaussian(), chains = 4, 
+         iter = 2000, warmup = 1000)
+
+@
+
+\texttt{brms}: \\
+
+<<cache=TRUE, eval=FALSE, tidy=FALSE>>=
+
+brm(formula = mpg ~ wt + am + cyl, data = mtcars, 
+    prior = NULL, family  = "gaussian", chains = 4, 
+    iter = 2000, warmup = 1000)
+
+
+@
+
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}
+\frametitle{system.time() and Marvok Chains}
+
+\begin{columns}[onlytextwidth,t]
+\begin{column}{0.48\textwidth}
+\texttt{rstanarm}\\
+system.time():   \\
+ \\
+ \textcolor{orange}{user  system elapsed \\
+  0.924   0.000   0.918 }  \\
+\vskip 1.2cm               
+1st Chain\\
+               0.107433 seconds (Warm-up) \\
+               0.09435 seconds (Sampling) \\
+               0.201783 seconds (Total) 
+
+\end{column}
+
+\begin{column}{0.48\textwidth}  
+\texttt{brms} \\
+system.time(): \\
+\textcolor{blue}{Compiling the C++ model }\\
+ \textcolor{orange}{   user  system elapsed \\
+ 50.728   1.276  52.083 }\\
+ \vskip .7cm
+1st Chain \\
+               0.070122 seconds (Warm-up) \\
+               0.068211 seconds (Sampling) \\
+               0.138333 seconds (Total) 
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}[fragile]
+\frametitle{Random Effect Coefficients}
+Generalized linear models with group-specific terms: \\
+
+\texttt{rstanarm}: \\
+
+<<cache=TRUE, echo=TRUE, eval=FALSE, tidy=FALSE>>=
+
+stan_glmer(formula = mpg ~ wt + am + (1|cyl), data = mtcars, 
+           prior = NULL, family = gaussian(), chains=4, 
+           iter=2000, warmup=1000)
+
+@
+
+\texttt{brms}: \\
+
+<<cache=TRUE, echo=TRUE, eval=FALSE, tidy=FALSE>>=
+
+brm(formula = mpg ~ wt + am + (1|cyl), data = mtcars, 
+    prior = NULL, family="gaussian", chains=4, 
+    iter=2000, warmup=1000)
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}[fragile]
+\frametitle{Smooth Terms}
+The implementation is
+similar to that used in the \texttt{gamm4} package:
+
+\texttt{rstanarm}: 
+
+<<cache=TRUE, echo=TRUE, eval=FALSE, tidy=FALSE>>=
+dat <- mgcv::gamSim(1, n = 200, scale = 2)
+
+stan_gamm4(y ~ s(x0) + x1 + (1|x2) + s(x3), data = dat, 
+                 prior = NULL, family = gaussian(), chains=4, 
+                 iter=2000, warmup=1000)
+
+@
+
+\texttt{brms}: 
+
+<<cache=TRUE, echo=TRUE, eval=FALSE, tidy=FALSE>>=
+
+brm(y ~ s(x0) + x1 + (1|x2) + s(x3), data = dat, 
+    prior = NULL, family="gaussian", chains=4, 
+    iter=2000, warmup=1000)
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}[fragile]
+\frametitle{Priors' Specification: the Dirty Job}
+The packages offer all the priors' you would ever need: Student t family, Hierarchical shrinkage family, Laplace family, Product-normal family, Dirichlet family, etc.\\
+\pause
+\texttt{rstanarm}: \\
+
+<<cache=TRUE, echo=TRUE, eval=FALSE, tidy=FALSE>>=
+
+stan_glmer(mpg ~ wt + am + (1|cyl), data = mtcars, 
+           prior = student_t(df=4, location=0, scale=2.5), 
+           prior_intercept = cauchy(location=0, scale=10))
+
+@
+\pause
+In \texttt{rstanarm} you cannot (to the best of my knowledge), choose different priors for different coefficeints since this would break vectorization. In \texttt{brms} cou can, but it may slow down the process.
+
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}[fragile]
+\frametitle{Getting into the Priors'}
+
+In \texttt{brms} only you can start with: \\
+
+<<cache=TRUE, echo=TRUE, eval=TRUE, tidy=FALSE>>=
+
+get_prior(formula = mpg ~ wt + am + (1|cyl), 
+          data = mtcars, family="gaussian")
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}[fragile]
+\frametitle{Priors' Specification: the Dirty Job}
+
+<<cache=TRUE, echo=TRUE, eval=FALSE, tidy=FALSE>>=
+prior <- c(set_prior("normal(0,10)", class = "b"), 
+           set_prior("normal(1,2)", class = "b", coef = "wt"),
+           # Sd of group-level (’random’) effects
+           set_prior("cauchy(0,2)", class = "sd", 
+            group = "cyl", coef = "Intercept")), 
+           set_prior("student_t(3, 0, 10)", class = "sigma"))) 
+
+
+brm(mpg ~ wt + am + (1|cyl), data = mtcars, prior = prior)
+
+@
+For gamm you can specify the standard deviation of the smooth terms: \texttt{class = sds}.
+
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}[fragile]
+\frametitle{Parallelize the Chains}
+
+
+It is possible to parallelaze the Markov chains in both packages by using the argument \texttt{cores = ...} within the function. \\
+Or by using more general parallel syntax: \\
+<<cache=TRUE, echo=TRUE, eval=FALSE, tidy=FALSE>>=
+options (mc.cores=parallel::detectCores ()) 
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}[fragile]
+\frametitle{Plot the Results' }
+
+<<cache=TRUE, echo=FALSE, include=FALSE, warning=FALSE>>=
+rstanarm_glmer <- stan_glmer(formula = mpg ~ wt + am + (1|cyl), 
+                 data = mtcars,  prior = NULL, 
+                 family = gaussian())
+
+
+@
+
+<<p1b, fig.pos="H", fig.height=4, fig.cap="Correlation of given predictors.">>=
+
+plot(rstanarm_glmer)
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}[fragile]
+\frametitle{Plot the Results' }
+
+<<cache=TRUE, echo=FALSE, include=FALSE, warning=FALSE>>=
+
+brm_re <- brm(formula = mpg ~ wt + am + (1|cyl), data = mtcars, 
+    prior = NULL, family="gaussian", chains=4, 
+    iter=2000, warmup=1000)
+
+@
+
+<<p2b, fig.pos="H", fig.height=4, fig.cap="Correlation of given predictors.">>=
+plot(brm_re)
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}[fragile]
+\frametitle{Results' Diagnostics: \texttt{shinystan}}
+\texttt{shinystan} workd both for \texttt{stanreg} and \texttt{brmsfit} objects:\\
+
+<<cache=TRUE, echo=TRUE, eval=FALSE, tidy=FALSE>>=
+
+m1 <- stan_glmer(formula = mpg ~ wt + am + (1|cyl), 
+                 data = mtcars,  prior = NULL, 
+                 family = gaussian())
+
+launch_shinystan(m1)
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Get the STAN code}
+\pause
+\texttt{rstanarm: shinystan} \\
+\pause
+\texttt{brms: make_stancode}!
+<<eval=FALSE, tidy = FALSE>>=
+
+make_stancode(mpg ~ wt + am + cyl, data = mtcars,
+    prior = NULL, family  = "gaussian")
+
+@
+
+model {                                                   \\
+  vector[N] mu = Xc * b; \\
+  for (n in 1:N) { \\
+    mu[n] = mu[n] + (r_1_1[J_1[n]]) * Z_1_1[n];  \\
+  } \\
+  // priors including all constants \\
+  target += student_t_lpdf(temp_Intercept | 3, 0, 10); \\
+  target += student_t_lpdf(sd_1 | 3, 0, 10)\\
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}[fragile]
+\frametitle{Some Differences}
+\pause
+With \texttt{brms} you can also implement multinomial logistic regressions
+<<eval=FALSE, tidy = FALSE>>=
+brm(Species ~ Petal.Length + Petal.Width + Sepal.Length + 
+      Sepal.Width, data=iris, family="categorical",
+    prior=c(set_prior("normal (0, 8)")))
+
+@
+
+
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}[fragile]
+\frametitle{Correlations}
+With \texttt{brms} you can also deal easily with different correlation structures by specifieng: \\
+\begin{itemize}
+\item \textbf{cor_arma}: autoregressive-moving average (ARMA) structure. \\
+\item \textbf{cor_arr}: response autoregressive (ARR) structure \\
+\item \textbf{cor_car}: Spatial conditional autoregressive (CAR) structure \\
+\item \textbf{cor_sar}: Spatial simultaneous autoregressive (SAR) structure \\
+\item \textbf{cor_bsts}: Bayesian structural time series (BSTS) structure \\
+\item \textbf{cor_fixed}: fixed user-defined covariance structure \\
+\end{itemize}
+
+<<eval=FALSE, tidy = FALSE>>=
+
+brm(mpg ~ wt + am + (1|cyl), data = mtcars, prior = NULL,
+    family="gaussian", cor_arma(formula = ~1, q = 1))
+
+@
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}
+\frametitle{Conclusions}
+\pause
+\begin{itemize}
+\item \texttt{rstanarm} can be the easiest package to start with since precompiled, but it might be limiting (intentionally) for more advanced needs.
+\pause
+\item \texttt{brms} is more flexible and customizable.
+\pause
+\item \texttt{rstan} fully flexible, but you need to learn STAN programming (maybe with the help of \texttt{make_stancode}).
+\end{itemize}
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}
+\frametitle{\texttt{\# stanarm}}
+\pause
+\begin{figure}
+\includegraphics[scale=0.4]{Twitter4.png}
+\end{figure}
+\pause
+\begin{figure}
+\includegraphics[scale=0.4]{Twitter5.png}
+\end{figure}
+\pause
+\begin{figure}
+\includegraphics[scale=0.4]{Twitter6.png}
+\end{figure}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{frame}
+\frametitle{\texttt{\# brms}}
+\pause
+\begin{figure}
+\includegraphics[scale=0.3]{Twitter1.png}
+\end{figure}
+\pause
+\begin{figure}
+\includegraphics[scale=0.4]{Twitter2.png}
+\end{figure}
+\pause
+\begin{figure}
+\includegraphics[scale=0.4]{Twitter3.png}
+\end{figure}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Should I be Bayesian?}
+\pause
+Sampling can be slow \\
+\pause
+You need to be really careful about diagnostics \\
+\pause
+You need to have ideas about priors\\
+\pause
+\textbf{BUT!}\\
+\pause
+It can help when dealing with small data \\
+\pause 
+In forecasts since:\\
+\textit{"...in terms of forecasting ability, ...a good Bayesian will beat a non-Bayesian, who will do better than a bad Bayesian."} \\
+[C.W.J. Granger (1986, p. 16)]\\
+\pause
+At the end it is a real philosophical question about how you intend statistics. \\
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{The End}
+
+\begin{figure}
+\includegraphics[scale=0.4]{pic1.JPG}
+\end{figure}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+\begin{frame}[allowframebreaks]
+\frametitle{References}
+\printbibliography
+
+\end{frame}
+
+
+
+\end{document}
